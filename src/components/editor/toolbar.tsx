@@ -7,6 +7,7 @@ import {
   Square,
   Circle,
   Hand,
+  Ruler,
   Magnet,
   Grid3x3,
   type LucideIcon,
@@ -27,6 +28,7 @@ const TOOLS: { tool: Tool; icon: LucideIcon; label: string; key: string }[] = [
   { tool: "polyline", icon: PenTool, label: "Path (click points, Enter to finish)", key: "P" },
   { tool: "rect", icon: Square, label: "Rectangle", key: "R" },
   { tool: "ellipse", icon: Circle, label: "Ellipse", key: "E" },
+  { tool: "measure", icon: Ruler, label: "Measure (drag between points)", key: "M" },
   { tool: "pan", icon: Hand, label: "Pan (or hold Space)", key: "H" },
 ];
 

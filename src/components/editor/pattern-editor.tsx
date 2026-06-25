@@ -24,6 +24,7 @@ const TOOL_KEYS: Record<string, Tool> = {
   p: "polyline",
   r: "rect",
   e: "ellipse",
+  m: "measure",
   h: "pan",
 };
 

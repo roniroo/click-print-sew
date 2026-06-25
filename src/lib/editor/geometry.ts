@@ -142,6 +142,48 @@ export function hitTest(el: Element, p: Point, tol: number): boolean {
   }
 }
 
+/**
+ * Selection-oriented hit test: closed shapes (rect, ellipse, closed paths) are
+ * grabbable anywhere inside, not just on their outline, so they're easy to pick
+ * up and move. Open shapes (lines, open paths) still hit on the stroke only.
+ */
+export function hitTestSelect(el: Element, p: Point, tol: number): boolean {
+  if (el.type === "line" || (el.type === "polyline" && !el.closed)) {
+    return hitTest(el, p, tol);
+  }
+  // Treat closed shapes as filled so the interior counts as a hit.
+  const filled = { ...el, fill: el.fill === "none" ? "#000000" : el.fill } as Element;
+  return hitTest(filled, p, tol);
+}
+
+/** The snap-worthy vertices of an element (endpoints, corners, ellipse poles). */
+export function elementVertices(el: Element): Point[] {
+  switch (el.type) {
+    case "line":
+      return [el.points[0], el.points[1]];
+    case "polyline":
+      return el.points;
+    case "rect": {
+      const b = elementBounds(el);
+      return [
+        { x: b.x, y: b.y },
+        { x: b.x + b.w, y: b.y },
+        { x: b.x, y: b.y + b.h },
+        { x: b.x + b.w, y: b.y + b.h },
+        { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+      ];
+    }
+    case "ellipse":
+      return [
+        { x: el.cx, y: el.cy },
+        { x: el.cx - el.rx, y: el.cy },
+        { x: el.cx + el.rx, y: el.cy },
+        { x: el.cx, y: el.cy - el.ry },
+        { x: el.cx, y: el.cy + el.ry },
+      ];
+  }
+}
+
 /** Return a copy of the element translated by (dx, dy) document units. */
 export function translateElement(el: Element, dx: number, dy: number): Element {
   switch (el.type) {

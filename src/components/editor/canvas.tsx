@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus } from "lucide-react";
-import type { Element, Point } from "@/lib/types";
+import type { Element, Point, Unit } from "@/lib/types";
 import { useEditor } from "@/lib/editor/store";
 import {
   distance,
   elementBounds,
-  hitTest,
+  elementLength,
+  elementVertices,
+  hitTestSelect,
   translateElement,
+  unionBounds,
   type Bounds,
 } from "@/lib/editor/geometry";
-import { resolvePoint, snapToGrid } from "@/lib/editor/snap";
+import { constrainAngle, resolvePoint, snapToGrid } from "@/lib/editor/snap";
 import {
   createEllipse,
   createLine,
@@ -65,6 +68,10 @@ export function Canvas() {
   const panRef = useRef<{ cx: number; cy: number; startPan: Point } | null>(null);
   const notionDragRef = useRef<string | null>(null);
   const spaceRef = useRef(false);
+
+  const [measure, setMeasure] = useState<{ start: Point; current: Point } | null>(null);
+  const measuringRef = useRef(false);
+  const [hoverMovable, setHoverMovable] = useState(false);
 
   const screenToDoc = useCallback(
     (clientX: number, clientY: number): Point => {
@@ -194,11 +201,46 @@ export function Canvas() {
       for (let i = doc.elements.length - 1; i >= 0; i--) {
         const el = doc.elements[i];
         if (hidden.has(el.layerId) || locked.has(el.layerId)) continue;
-        if (hitTest(el, p, tol)) return el.id;
+        if (hitTestSelect(el, p, tol)) return el.id;
       }
       return null;
     },
     [doc, scale],
+  );
+
+  const selectableElements = useCallback((): Element[] => {
+    const blocked = new Set(
+      doc.layers.filter((l) => !l.visible || l.locked).map((l) => l.id),
+    );
+    return doc.elements.filter((el) => !blocked.has(el.layerId));
+  }, [doc]);
+
+  const selectionBounds = useCallback((): Bounds | null => {
+    const sel = doc.elements.filter((el) => selectedIds.includes(el.id));
+    return sel.length ? unionBounds(sel.map(elementBounds)) : null;
+  }, [doc, selectedIds]);
+
+  /** Resolve a measure endpoint: snap to a nearby element vertex, else grid/45°. */
+  const snapMeasurePoint = useCallback(
+    (raw: Point, shift: boolean, anchor: Point | null): Point => {
+      const thr = 10 / scale;
+      let best: Point | null = null;
+      let bestD = thr;
+      for (const el of selectableElements()) {
+        for (const v of elementVertices(el)) {
+          const d = distance(raw, v);
+          if (d <= bestD) {
+            bestD = d;
+            best = v;
+          }
+        }
+      }
+      if (best) return best;
+      if (shift && anchor) return constrainAngle(anchor, raw);
+      if (snapEnabled) return snapToGrid(raw, grid);
+      return raw;
+    },
+    [selectableElements, scale, snapEnabled, grid],
   );
 
   function finishPolyline(close: boolean) {
@@ -242,6 +284,13 @@ export function Canvas() {
       return;
     }
 
+    if (tool === "measure") {
+      const start = snapMeasurePoint(docPt, shift, null);
+      measuringRef.current = true;
+      setMeasure({ start, current: start });
+      return;
+    }
+
     if (tool === "select") {
       // notion pins take priority — they're editing aids on top of the artwork
       const nr = 10 / scale;
@@ -252,8 +301,8 @@ export function Canvas() {
         setInteraction({ kind: "notion", id: notion.id });
         return;
       }
-      const hitId = hitTopmost(docPt);
       const st = useEditor.getState();
+      const hitId = hitTopmost(docPt);
       if (hitId) {
         if (shift) st.addToSelection(hitId);
         else if (!st.selectedIds.includes(hitId)) st.select([hitId]);
@@ -264,10 +313,29 @@ export function Canvas() {
         };
         movedRef.current = false;
         setInteraction({ kind: "move", current: docPt });
-      } else {
-        if (!shift) st.clearSelection();
-        setInteraction({ kind: "marquee", start: docPt, current: docPt });
+        return;
       }
+      // empty space inside the current selection's box → move the whole selection
+      const selB = selectionBounds();
+      if (!shift && selB) {
+        const pad = SELECT_TOL_PX / scale;
+        const inside =
+          docPt.x >= selB.x - pad &&
+          docPt.x <= selB.x + selB.w + pad &&
+          docPt.y >= selB.y - pad &&
+          docPt.y <= selB.y + selB.h + pad;
+        if (inside) {
+          moveOriginRef.current = {
+            start: docPt,
+            originals: doc.elements.filter((el) => st.selectedIds.includes(el.id)),
+          };
+          movedRef.current = false;
+          setInteraction({ kind: "move", current: docPt });
+          return;
+        }
+      }
+      if (!shift) st.clearSelection();
+      setInteraction({ kind: "marquee", start: docPt, current: docPt });
       return;
     }
 
@@ -309,6 +377,27 @@ export function Canvas() {
       const last = pendingPoly[pendingPoly.length - 1];
       setPolyCursor(resolvePoint(docPt, { anchor: last, shift, snap: snapEnabled, gridSize: grid }));
       return;
+    }
+
+    if (tool === "measure" && measuringRef.current) {
+      setMeasure((prev) =>
+        prev ? { start: prev.start, current: snapMeasurePoint(docPt, shift, prev.start) } : prev,
+      );
+      return;
+    }
+
+    // hover affordance: show a move cursor over grabbable shapes
+    if (tool === "select" && !interaction && e.buttons === 0) {
+      const pad = SELECT_TOL_PX / scale;
+      const b = selectionBounds();
+      const overSelection =
+        !!b &&
+        docPt.x >= b.x - pad &&
+        docPt.x <= b.x + b.w + pad &&
+        docPt.y >= b.y - pad &&
+        docPt.y <= b.y + b.h + pad;
+      const over = overSelection || !!hitTopmost(docPt);
+      if (over !== hoverMovable) setHoverMovable(over);
     }
 
     if (!interaction) return;
@@ -372,6 +461,10 @@ export function Canvas() {
     }
     if (panRef.current) {
       panRef.current = null;
+      return;
+    }
+    if (measuringRef.current) {
+      measuringRef.current = false;
       return;
     }
     if (!interaction) return;
@@ -441,8 +534,15 @@ export function Canvas() {
     tool === "pan"
       ? "cursor-grab"
       : tool === "select"
-        ? "cursor-default"
+        ? hoverMovable
+          ? "cursor-move"
+          : "cursor-default"
         : "cursor-crosshair";
+
+  const selectedEl =
+    selectedIds.length === 1
+      ? visibleElements.find((e) => e.id === selectedIds[0]) ?? null
+      : null;
 
   // live measurement label during a draw
   const measurement = getMeasurement(interaction, tool, doc.units);
@@ -527,6 +627,33 @@ export function Canvas() {
               vectorEffect="non-scaling-stroke"
             />
           ) : null}
+          {/* measure overlay */}
+          {tool === "measure" && measure ? (
+            <g>
+              <line
+                x1={measure.start.x}
+                y1={measure.start.y}
+                x2={measure.current.x}
+                y2={measure.current.y}
+                stroke="#0d9488"
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+                vectorEffect="non-scaling-stroke"
+              />
+              {[measure.start, measure.current].map((p, i) => (
+                <circle
+                  key={i}
+                  cx={p.x}
+                  cy={p.y}
+                  r={3.5 / scale}
+                  fill="#ffffff"
+                  stroke="#0d9488"
+                  strokeWidth={1.5}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </g>
+          ) : null}
         </g>
       </svg>
 
@@ -553,6 +680,40 @@ export function Canvas() {
           </div>
         );
       })}
+
+      {/* measure readout */}
+      {tool === "measure" && measure
+        ? (() => {
+            const mid = docToScreen({
+              x: (measure.start.x + measure.current.x) / 2,
+              y: (measure.start.y + measure.current.y) / 2,
+            });
+            return (
+              <div
+                className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-teal-600 px-1.5 py-0.5 text-xs font-semibold text-white shadow"
+                style={{ left: mid.x, top: mid.y - 14 }}
+              >
+                {formatLength(distance(measure.start, measure.current), doc.units)}
+              </div>
+            );
+          })()
+        : null}
+
+      {/* dimensions of the selected shape */}
+      {selectedEl
+        ? dimensionLabelsFor(selectedEl, doc.units).map((d, i) => {
+            const s = docToScreen(d.at);
+            return (
+              <div
+                key={i}
+                className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-blue-600 px-1 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+                style={{ left: s.x, top: s.y }}
+              >
+                {d.text}
+              </div>
+            );
+          })
+        : null}
 
       {/* zoom controls */}
       <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 rounded-lg border border-border bg-card/90 p-1 shadow-sm backdrop-blur">
@@ -711,10 +872,48 @@ function PolylinePreview({
   );
 }
 
+/** On-canvas dimension labels for a single selected element. */
+function dimensionLabelsFor(el: Element, units: Unit): { text: string; at: Point }[] {
+  switch (el.type) {
+    case "line": {
+      const [a, b] = el.points;
+      return [
+        {
+          text: formatLength(distance(a, b), units),
+          at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        },
+      ];
+    }
+    case "rect": {
+      const b = elementBounds(el);
+      return [
+        { text: formatLength(b.w, units), at: { x: b.x + b.w / 2, y: b.y } },
+        { text: formatLength(b.h, units), at: { x: b.x, y: b.y + b.h / 2 } },
+      ];
+    }
+    case "ellipse": {
+      const b = elementBounds(el);
+      return [
+        { text: formatLength(b.w, units), at: { x: el.cx, y: el.cy - el.ry } },
+        { text: formatLength(b.h, units), at: { x: el.cx - el.rx, y: el.cy } },
+      ];
+    }
+    case "polyline": {
+      const b = elementBounds(el);
+      return [
+        {
+          text: formatLength(elementLength(el), units),
+          at: { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+        },
+      ];
+    }
+  }
+}
+
 function getMeasurement(
   interaction: Interaction,
   tool: string,
-  units: import("@/lib/types").Unit,
+  units: Unit,
 ): string | null {
   if (interaction?.kind !== "draw") return null;
   const { start, current } = interaction;

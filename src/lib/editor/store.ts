@@ -15,7 +15,14 @@ import {
   newId,
 } from "./document";
 
-export type Tool = "select" | "pan" | "line" | "rect" | "ellipse" | "polyline";
+export type Tool =
+  | "select"
+  | "pan"
+  | "line"
+  | "rect"
+  | "ellipse"
+  | "polyline"
+  | "measure";
 export type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 
 const HISTORY_LIMIT = 60;

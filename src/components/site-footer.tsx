@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { Coffee } from "lucide-react";
+
+export const SUPPORT_URL = "https://buymeacoffee.com/veronicalec";
 
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -19,6 +22,14 @@ export function SiteFooter() {
           <Link href="/explore" className="hover:text-foreground">
             Explore
           </Link>
+          <a
+            href={SUPPORT_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <Coffee className="size-4" /> Buy me a coffee
+          </a>
           <a
             href="https://github.com/roniroo/click-print-sew"
             target="_blank"

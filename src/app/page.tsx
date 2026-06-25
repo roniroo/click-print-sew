@@ -7,9 +7,10 @@ import {
   Library,
   Scissors,
   ArrowRight,
+  Coffee,
 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
+import { SiteFooter, SUPPORT_URL } from "@/components/site-footer";
 import { NotebookCard } from "@/components/paper/notebook-card";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
@@ -119,6 +120,19 @@ export default async function HomePage() {
               </Link>
             </Button>
           </div>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Free and open source, always. If it saves you time, you can{" "}
+            <a
+              href={SUPPORT_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              <Coffee className="size-3.5" /> buy me a coffee
+            </a>
+            .
+          </p>
         </section>
       </main>
       <SiteFooter />
