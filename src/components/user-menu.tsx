@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutGrid, LogOut, Plus, User } from "lucide-react";
+import { LayoutGrid, LogOut, Plus, Settings, User } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -40,6 +40,11 @@ export function UserMenu({ username }: { username: string }) {
         <DropdownMenuItem asChild>
           <Link href="/patterns/new">
             <Plus className="size-4" /> New pattern
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/account">
+            <Settings className="size-4" /> Account
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

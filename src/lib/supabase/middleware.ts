@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 /** Paths that require an authenticated user. */
 function isProtectedPath(pathname: string): boolean {
   if (pathname.startsWith("/dashboard")) return true;
+  if (pathname.startsWith("/account")) return true;
   if (pathname === "/patterns/new") return true;
   if (pathname.startsWith("/patterns/") && pathname.endsWith("/edit")) return true;
   return false;

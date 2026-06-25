@@ -3,16 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { loginSchema, signupSchema } from "@/lib/validation";
-
-/**
- * We never collect a real email. Each account maps to a deterministic internal
- * email derived from the username so we can use Supabase email/password auth.
- */
-const EMAIL_DOMAIN = "users.cutsewprint.app";
-
-function usernameToEmail(username: string): string {
-  return `${username}@${EMAIL_DOMAIN}`;
-}
+import { usernameToEmail } from "@/lib/auth-email";
 
 export interface AuthState {
   error: string | null;
