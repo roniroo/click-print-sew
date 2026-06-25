@@ -75,3 +75,59 @@ test("sign up, draw, print, and persist", async ({ page }) => {
 
   expect(errors, errors.join("\n")).toEqual([]);
 });
+
+test("library: dashboard, publish, explore, view, and clone", async ({ page }) => {
+  const user = "e2e_" + Math.random().toString(36).slice(2, 8);
+  const pass = "supersecret123";
+  const title = "E2E Pattern " + Math.random().toString(36).slice(2, 7);
+
+  await page.setViewportSize({ width: 1400, height: 900 });
+
+  // sign up + create a pattern
+  await page.goto("/signup");
+  await page.fill("#username", user);
+  await page.fill("#password", pass);
+  await page.click('button[type="submit"]');
+  await page.waitForURL("**/dashboard");
+
+  await page.goto("/patterns/new");
+  await page.waitForURL("**/edit");
+  await page.waitForSelector("svg");
+  const id = /patterns\/([0-9a-f-]+)\/edit/.exec(page.url())![1];
+
+  // draw a shape and title it
+  const canvas = page.locator("div.touch-none").first();
+  const box = (await canvas.boundingBox())!;
+  await page.click('button[aria-label="Rectangle"]');
+  await page.mouse.move(box.x + 300, box.y + 220);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 520, box.y + 380, { steps: 8 });
+  await page.mouse.up();
+  await page.fill('input[aria-label="Pattern title"]', title);
+  await page.keyboard.press("Control+s");
+  await expect(page.locator("header").first()).toContainText("Saved", { timeout: 8000 });
+
+  // dashboard shows the card
+  await page.goto("/dashboard");
+  await expect(page.getByText(title)).toBeVisible();
+
+  // publish it via the card menu
+  await page.click('button[aria-label="Pattern actions"]');
+  await page.getByRole("menuitem", { name: "Make public" }).click();
+  await expect(page.getByText("Published to Explore")).toBeVisible({ timeout: 8000 });
+
+  // explore finds it
+  await page.goto(`/explore?q=${encodeURIComponent(title)}`);
+  await expect(page.getByText(title)).toBeVisible();
+
+  // open the read-only view
+  await page.goto(`/patterns/${id}`);
+  await expect(page.locator("main svg").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Clone/ })).toBeVisible();
+
+  // clone opens a fresh editable copy
+  await page.getByRole("button", { name: /Clone/ }).click();
+  await page.waitForURL("**/edit");
+  const cloneId = /patterns\/([0-9a-f-]+)\/edit/.exec(page.url())![1];
+  expect(cloneId).not.toBe(id);
+});

@@ -33,11 +33,18 @@ import { cn } from "@/lib/utils";
 export function PrintDialog({
   open,
   onOpenChange,
+  doc: docProp,
+  title: titleProp,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** When provided (e.g. on the read-only view page), print this document
+   * instead of the editor store's. */
+  doc?: import("@/lib/types").PatternDocument;
+  title?: string;
 }) {
-  const doc = useEditor((s) => s.doc);
+  const storeDoc = useEditor((s) => s.doc);
+  const doc = docProp ?? storeDoc;
 
   const [paperId, setPaperId] = useState("letter");
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
@@ -78,14 +85,14 @@ export function PrintDialog({
   async function handleExport() {
     setBusy(true);
     try {
-      const result = await exportPatternPdf(useEditor.getState().doc, {
+      const result = await exportPatternPdf(docProp ?? useEditor.getState().doc, {
         paperWmm,
         paperHmm,
         marginMm,
         overlapMm,
         lineWidthMm,
         includeTestSquare: testSquare,
-        title: useEditor.getState().title,
+        title: titleProp ?? useEditor.getState().title,
       });
       toast.success(
         `Exported ${result.pageCount} page${result.pageCount > 1 ? "s" : ""} to PDF`,

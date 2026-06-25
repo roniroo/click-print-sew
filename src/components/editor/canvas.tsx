@@ -29,6 +29,7 @@ type Interaction =
   | { kind: "draw"; start: Point; current: Point }
   | { kind: "move"; current: Point }
   | { kind: "marquee"; start: Point; current: Point }
+  | { kind: "notion"; id: string }
   | null;
 
 function boundsIntersect(a: Bounds, b: Bounds): boolean {
@@ -50,6 +51,7 @@ export function Canvas() {
   const pan = useEditor((s) => s.pan);
   const snapEnabled = useEditor((s) => s.snapEnabled);
   const gridVisible = useEditor((s) => s.gridVisible);
+  const notions = useEditor((s) => s.doc.materials.notions);
 
   const scale = doc.canvas.pxPerUnit * zoom;
   const grid = doc.canvas.gridSizeUnits;
@@ -61,6 +63,7 @@ export function Canvas() {
   const moveOriginRef = useRef<{ start: Point; originals: Element[] } | null>(null);
   const movedRef = useRef(false);
   const panRef = useRef<{ cx: number; cy: number; startPan: Point } | null>(null);
+  const notionDragRef = useRef<string | null>(null);
   const spaceRef = useRef(false);
 
   const screenToDoc = useCallback(
@@ -240,6 +243,15 @@ export function Canvas() {
     }
 
     if (tool === "select") {
+      // notion pins take priority — they're editing aids on top of the artwork
+      const nr = 10 / scale;
+      const notion = [...notions].reverse().find((n) => distance(docPt, n) <= nr);
+      if (notion) {
+        notionDragRef.current = notion.id;
+        movedRef.current = false;
+        setInteraction({ kind: "notion", id: notion.id });
+        return;
+      }
       const hitId = hitTopmost(docPt);
       const st = useEditor.getState();
       if (hitId) {
@@ -333,6 +345,22 @@ export function Canvas() {
       setInteraction({ kind: "move", current: docPt });
     } else if (interaction.kind === "marquee") {
       setInteraction({ ...interaction, current: docPt });
+    } else if (interaction.kind === "notion" && notionDragRef.current) {
+      const target = snapEnabled ? snapToGrid(docPt, grid) : docPt;
+      if (!movedRef.current) {
+        movedRef.current = true;
+        useEditor.getState().beginCommit();
+      }
+      const id = notionDragRef.current;
+      useEditor.getState().live((d) => ({
+        ...d,
+        materials: {
+          ...d.materials,
+          notions: d.materials.notions.map((n) =>
+            n.id === id ? { ...n, x: target.x, y: target.y } : n,
+          ),
+        },
+      }));
     }
   };
 
@@ -354,6 +382,7 @@ export function Canvas() {
       selectInMarquee(interaction.start, interaction.current, e.shiftKey);
     }
     moveOriginRef.current = null;
+    notionDragRef.current = null;
     movedRef.current = false;
     setInteraction(null);
   };
@@ -469,6 +498,13 @@ export function Canvas() {
                 </g>
               );
             })}
+          {/* notion pins */}
+          {notions.map((n) => (
+            <g key={`notion-${n.id}`}>
+              <circle cx={n.x} cy={n.y} r={7 / scale} fill="#ffffff" stroke="#dc2626" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+              <circle cx={n.x} cy={n.y} r={2.5 / scale} fill="#dc2626" />
+            </g>
+          ))}
           {/* draft preview */}
           {interaction?.kind === "draw" ? (
             <DraftPreview tool={tool} start={interaction.start} current={interaction.current} />
@@ -502,6 +538,21 @@ export function Canvas() {
           {measurement}
         </div>
       ) : null}
+
+      {/* notion labels */}
+      {notions.map((n) => {
+        const s = docToScreen(n);
+        return (
+          <div
+            key={`label-${n.id}`}
+            className="pointer-events-none absolute z-10 -translate-y-1/2 whitespace-nowrap rounded bg-card/90 px-1.5 py-0.5 text-[11px] font-medium text-foreground shadow-sm"
+            style={{ left: s.x + 10, top: s.y }}
+          >
+            {n.name}
+            {n.qty > 1 ? <span className="text-muted-foreground"> ×{n.qty}</span> : null}
+          </div>
+        );
+      })}
 
       {/* zoom controls */}
       <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 rounded-lg border border-border bg-card/90 p-1 shadow-sm backdrop-blur">
