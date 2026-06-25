@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   distance,
   elementBounds,
+  elementEdges,
+  edgeSegment,
   unionBounds,
   pointToSegment,
   hitTest,
@@ -97,5 +99,28 @@ describe("elementLength", () => {
 describe("distance", () => {
   it("computes euclidean distance", () => {
     expect(distance({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
+  });
+});
+
+describe("elementEdges / edgeSegment", () => {
+  it("returns four ordered edges for a rect", () => {
+    const edges = elementEdges(createRect(L, 0, 0, 10, 6));
+    expect(edges).toHaveLength(4);
+    expect(edges[0]).toEqual({ a: { x: 0, y: 0 }, b: { x: 10, y: 0 } }); // top
+    expect(edges[3]).toEqual({ a: { x: 0, y: 6 }, b: { x: 0, y: 0 } }); // left
+  });
+
+  it("counts segments for lines, open/closed polylines, and ellipses", () => {
+    expect(elementEdges(createLine(L, { x: 0, y: 0 }, { x: 3, y: 4 }))).toHaveLength(1);
+    const pts = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }];
+    expect(elementEdges(createPolyline(L, pts, false))).toHaveLength(2);
+    expect(elementEdges(createPolyline(L, pts, true))).toHaveLength(3);
+    expect(elementEdges(createEllipse(L, 0, 0, 2, 2))).toHaveLength(0);
+  });
+
+  it("resolves an edge by index, or null when out of range", () => {
+    const r = createRect(L, 0, 0, 4, 4);
+    expect(edgeSegment(r, 1)).toEqual({ a: { x: 4, y: 0 }, b: { x: 4, y: 4 } });
+    expect(edgeSegment(r, 9)).toBeNull();
   });
 });

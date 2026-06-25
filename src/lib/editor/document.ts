@@ -49,6 +49,7 @@ export function createEmptyDocument(units: Unit = "in"): PatternDocument {
     layers: [layer],
     elements: [],
     pieces: [],
+    seams: [],
     materials: { fabrics: [], notions: [] },
   };
 }
@@ -159,6 +160,7 @@ export function convertDocumentUnits(
       pxPerUnit: doc.canvas.pxPerUnit / f,
     },
     elements: doc.elements.map((el) => scaleElement(el, f)),
+    seams: doc.seams,
     pieces: doc.pieces.map((pc) => ({
       ...pc,
       seamAllowance: pc.seamAllowance * f,

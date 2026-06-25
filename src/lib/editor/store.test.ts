@@ -52,6 +52,25 @@ describe("editor store", () => {
     expect(useEditor.getState().doc.elements[0].pieceId).toBe(pieceId);
   });
 
+  it("adds a seam and drops it when a referenced element is deleted", () => {
+    const st = useEditor.getState();
+    const layer = st.doc.layers[0].id;
+    const r1 = createRect(layer, 0, 0, 4, 4);
+    const r2 = createRect(layer, 10, 0, 4, 4);
+    st.addElement(r1);
+    st.addElement(r2);
+    useEditor.getState().addSeam(
+      { elementId: r1.id, edgeIndex: 1 },
+      { elementId: r2.id, edgeIndex: 3 },
+    );
+    expect(useEditor.getState().doc.seams).toHaveLength(1);
+    expect(useEditor.getState().doc.seams[0].label).toBe("1");
+
+    useEditor.getState().select([r1.id]);
+    useEditor.getState().deleteSelected();
+    expect(useEditor.getState().doc.seams).toHaveLength(0);
+  });
+
   it("marks the document unsaved after an edit", () => {
     const st = useEditor.getState();
     expect(useEditor.getState().saveStatus).toBe("saved");

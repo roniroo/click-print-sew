@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus } from "lucide-react";
-import type { Element, Point, Unit } from "@/lib/types";
+import type { EdgeRef, Element, Point, Unit } from "@/lib/types";
 import { useEditor } from "@/lib/editor/store";
 import {
   distance,
+  edgeSegment,
   elementBounds,
+  elementEdges,
   elementLength,
   elementVertices,
   hitTestSelect,
+  pointToSegment,
   translateElement,
   unionBounds,
   type Bounds,
@@ -72,6 +75,7 @@ export function Canvas() {
   const [measure, setMeasure] = useState<{ start: Point; current: Point } | null>(null);
   const measuringRef = useRef(false);
   const [hoverMovable, setHoverMovable] = useState(false);
+  const [pendingSeam, setPendingSeam] = useState<EdgeRef | null>(null);
 
   const screenToDoc = useCallback(
     (clientX: number, clientY: number): Point => {
@@ -171,6 +175,8 @@ export function Canvas() {
         if (pendingPoly) {
           setPendingPoly(null);
           setPolyCursor(null);
+        } else if (pendingSeam) {
+          setPendingSeam(null);
         } else {
           useEditor.getState().clearSelection();
         }
@@ -187,7 +193,7 @@ export function Canvas() {
       window.removeEventListener("keyup", onKeyUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingPoly]);
+  }, [pendingPoly, pendingSeam]);
 
   const hitTopmost = useCallback(
     (p: Point): string | null => {
@@ -243,6 +249,26 @@ export function Canvas() {
     [selectableElements, scale, snapEnabled, grid],
   );
 
+  /** Nearest straight edge (segment) to a point, across all elements. */
+  const nearestEdge = useCallback(
+    (p: Point, tol: number): EdgeRef | null => {
+      let best: EdgeRef | null = null;
+      let bestD = tol;
+      for (const el of selectableElements()) {
+        const edges = elementEdges(el);
+        for (let i = 0; i < edges.length; i++) {
+          const d = pointToSegment(p, edges[i].a, edges[i].b);
+          if (d <= bestD) {
+            bestD = d;
+            best = { elementId: el.id, edgeIndex: i };
+          }
+        }
+      }
+      return best;
+    },
+    [selectableElements],
+  );
+
   function finishPolyline(close: boolean) {
     const poly = pendingPoly;
     if (poly && poly.length >= 2) {
@@ -288,6 +314,28 @@ export function Canvas() {
       const start = snapMeasurePoint(docPt, shift, null);
       measuringRef.current = true;
       setMeasure({ start, current: start });
+      return;
+    }
+
+    if (tool === "seam") {
+      const edge = nearestEdge(docPt, (SELECT_TOL_PX + 5) / scale);
+      if (!edge) {
+        setPendingSeam(null);
+        return;
+      }
+      // first click picks an edge; second click on a different edge pairs them
+      const stale =
+        !!pendingSeam && !doc.elements.some((el) => el.id === pendingSeam.elementId);
+      if (!pendingSeam || stale) {
+        setPendingSeam(edge);
+        return;
+      }
+      if (pendingSeam.elementId === edge.elementId && pendingSeam.edgeIndex === edge.edgeIndex) {
+        setPendingSeam(null);
+        return;
+      }
+      useEditor.getState().addSeam(pendingSeam, edge);
+      setPendingSeam(null);
       return;
     }
 
@@ -598,6 +646,56 @@ export function Canvas() {
                 </g>
               );
             })}
+          {/* seams (matched edges + notches) */}
+          {doc.seams.map((seam) => {
+            const elA = doc.elements.find((e) => e.id === seam.a.elementId);
+            const elB = doc.elements.find((e) => e.id === seam.b.elementId);
+            const segs = [
+              elA ? edgeSegment(elA, seam.a.edgeIndex) : null,
+              elB ? edgeSegment(elB, seam.b.edgeIndex) : null,
+            ];
+            return (
+              <g key={`seam-${seam.id}`}>
+                {segs.map((seg, i) =>
+                  seg ? (
+                    <g key={i}>
+                      <line
+                        x1={seg.a.x}
+                        y1={seg.a.y}
+                        x2={seg.b.x}
+                        y2={seg.b.y}
+                        stroke={seam.color}
+                        strokeWidth={3.5}
+                        strokeLinecap="round"
+                        opacity={0.85}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <NotchTicks a={seg.a} b={seg.b} scale={scale} color={seam.color} />
+                    </g>
+                  ) : null,
+                )}
+              </g>
+            );
+          })}
+          {tool === "seam" && pendingSeam
+            ? (() => {
+                const el = doc.elements.find((e) => e.id === pendingSeam.elementId);
+                const seg = el ? edgeSegment(el, pendingSeam.edgeIndex) : null;
+                return seg ? (
+                  <line
+                    x1={seg.a.x}
+                    y1={seg.a.y}
+                    x2={seg.b.x}
+                    y2={seg.b.y}
+                    stroke="#0d9488"
+                    strokeWidth={3.5}
+                    strokeDasharray="5 3"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ) : null;
+              })()
+            : null}
           {/* notion pins */}
           {notions.map((n) => (
             <g key={`notion-${n.id}`}>
@@ -680,6 +778,25 @@ export function Canvas() {
           </div>
         );
       })}
+
+      {/* seam labels */}
+      {doc.seams.flatMap((seam) =>
+        [seam.a, seam.b].map((ref, i) => {
+          const el = doc.elements.find((e) => e.id === ref.elementId);
+          const seg = el ? edgeSegment(el, ref.edgeIndex) : null;
+          if (!seg) return null;
+          const s = docToScreen({ x: (seg.a.x + seg.b.x) / 2, y: (seg.a.y + seg.b.y) / 2 });
+          return (
+            <div
+              key={`${seam.id}-${i}`}
+              className="pointer-events-none absolute z-10 grid h-4 min-w-4 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full px-1 text-[10px] font-bold text-white shadow"
+              style={{ left: s.x, top: s.y, background: seam.color }}
+            >
+              {seam.label}
+            </div>
+          );
+        }),
+      )}
 
       {/* measure readout */}
       {tool === "measure" && measure
@@ -869,6 +986,46 @@ function PolylinePreview({
         />
       ))}
     </g>
+  );
+}
+
+/** Perpendicular notch ticks along a seam edge. */
+function NotchTicks({
+  a,
+  b,
+  scale,
+  color,
+}: {
+  a: Point;
+  b: Point;
+  scale: number;
+  color: string;
+}) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const half = 6 / scale / 2;
+  return (
+    <>
+      {[0.25, 0.5, 0.75].map((t, i) => {
+        const px = a.x + dx * t;
+        const py = a.y + dy * t;
+        return (
+          <line
+            key={i}
+            x1={px + nx * half}
+            y1={py + ny * half}
+            x2={px - nx * half}
+            y2={py - ny * half}
+            stroke={color}
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
+    </>
   );
 }
 

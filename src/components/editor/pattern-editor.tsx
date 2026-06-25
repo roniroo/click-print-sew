@@ -25,6 +25,7 @@ const TOOL_KEYS: Record<string, Tool> = {
   r: "rect",
   e: "ellipse",
   m: "measure",
+  s: "seam",
   h: "pan",
 };
 

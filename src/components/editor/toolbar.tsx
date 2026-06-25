@@ -8,6 +8,7 @@ import {
   Circle,
   Hand,
   Ruler,
+  Link2,
   Magnet,
   Grid3x3,
   type LucideIcon,
@@ -29,6 +30,7 @@ const TOOLS: { tool: Tool; icon: LucideIcon; label: string; key: string }[] = [
   { tool: "rect", icon: Square, label: "Rectangle", key: "R" },
   { tool: "ellipse", icon: Circle, label: "Ellipse", key: "E" },
   { tool: "measure", icon: Ruler, label: "Measure (drag between points)", key: "M" },
+  { tool: "seam", icon: Link2, label: "Seam: click two edges to match them", key: "S" },
   { tool: "pan", icon: Hand, label: "Pan (or hold Space)", key: "H" },
 ];
 

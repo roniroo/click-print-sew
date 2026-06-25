@@ -15,7 +15,13 @@ export interface PatternCardData {
 export function ensureDocument(raw: unknown, units: Unit): PatternDocument {
   const doc = raw as Partial<PatternDocument> | null | undefined;
   if (doc && Array.isArray(doc.layers) && doc.layers.length > 0) {
-    return doc as PatternDocument;
+    // Backfill fields added after a pattern was first saved.
+    return {
+      ...(doc as PatternDocument),
+      pieces: doc.pieces ?? [],
+      seams: doc.seams ?? [],
+      materials: doc.materials ?? { fabrics: [], notions: [] },
+    };
   }
   return createEmptyDocument(units);
 }

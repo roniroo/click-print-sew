@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  EdgeRef,
   Element,
   Fabric,
   Notion,
@@ -22,7 +23,8 @@ export type Tool =
   | "rect"
   | "ellipse"
   | "polyline"
-  | "measure";
+  | "measure"
+  | "seam";
 export type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 
 const HISTORY_LIMIT = 60;
@@ -98,6 +100,11 @@ interface EditorState {
   setPieceFabric: (pieceId: string, fabricId: string | null) => void;
   setPieceSeamAllowance: (pieceId: string, value: number) => void;
 
+  // seams
+  addSeam: (a: EdgeRef, b: EdgeRef) => void;
+  removeSeam: (id: string) => void;
+  renameSeam: (id: string, label: string) => void;
+
   // materials
   addFabric: () => void;
   updateFabric: (id: string, patch: Partial<Fabric>) => void;
@@ -128,6 +135,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     layers: [],
     elements: [],
     pieces: [],
+    seams: [],
     materials: { fabrics: [], notions: [] },
   },
   tool: "select",
@@ -234,6 +242,9 @@ export const useEditor = create<EditorState>((set, get) => ({
     get().commit((d) => ({
       ...d,
       elements: d.elements.filter((e) => !ids.includes(e.id)),
+      seams: d.seams.filter(
+        (s) => !ids.includes(s.a.elementId) && !ids.includes(s.b.elementId),
+      ),
       pieces: d.pieces.map((pc) => ({
         ...pc,
         elementIds: pc.elementIds.filter((eid) => !ids.includes(eid)),
@@ -275,11 +286,19 @@ export const useEditor = create<EditorState>((set, get) => ({
   deleteLayer: (id) => {
     const { doc } = get();
     if (doc.layers.length <= 1) return;
-    get().commit((d) => ({
-      ...d,
-      layers: d.layers.filter((l) => l.id !== id),
-      elements: d.elements.filter((e) => e.layerId !== id),
-    }));
+    get().commit((d) => {
+      const removed = new Set(
+        d.elements.filter((e) => e.layerId === id).map((e) => e.id),
+      );
+      return {
+        ...d,
+        layers: d.layers.filter((l) => l.id !== id),
+        elements: d.elements.filter((e) => e.layerId !== id),
+        seams: d.seams.filter(
+          (s) => !removed.has(s.a.elementId) && !removed.has(s.b.elementId),
+        ),
+      };
+    });
     if (get().activeLayerId === id) {
       set({ activeLayerId: get().doc.layers[0]?.id ?? "" });
     }
@@ -359,6 +378,30 @@ export const useEditor = create<EditorState>((set, get) => ({
       pieces: d.pieces.map((p) =>
         p.id === pieceId ? { ...p, seamAllowance: value } : p,
       ),
+    })),
+
+  addSeam: (a, b) =>
+    get().commit((d) => ({
+      ...d,
+      seams: [
+        ...d.seams,
+        {
+          id: newId(),
+          label: String(d.seams.length + 1),
+          a,
+          b,
+          color: PIECE_COLORS[d.seams.length % PIECE_COLORS.length],
+        },
+      ],
+    })),
+
+  removeSeam: (id) =>
+    get().commit((d) => ({ ...d, seams: d.seams.filter((s) => s.id !== id) })),
+
+  renameSeam: (id, label) =>
+    get().commit((d) => ({
+      ...d,
+      seams: d.seams.map((s) => (s.id === id ? { ...s, label } : s)),
     })),
 
   addFabric: () => {

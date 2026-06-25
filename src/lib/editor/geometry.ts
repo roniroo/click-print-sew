@@ -184,6 +184,49 @@ export function elementVertices(el: Element): Point[] {
   }
 }
 
+export interface Segment {
+  a: Point;
+  b: Point;
+}
+
+/** Straight edges of an element, in segment-index order. Ellipses have none. */
+export function elementEdges(el: Element): Segment[] {
+  switch (el.type) {
+    case "line":
+      return [{ a: el.points[0], b: el.points[1] }];
+    case "rect": {
+      const b = elementBounds(el);
+      const tl = { x: b.x, y: b.y };
+      const tr = { x: b.x + b.w, y: b.y };
+      const br = { x: b.x + b.w, y: b.y + b.h };
+      const bl = { x: b.x, y: b.y + b.h };
+      return [
+        { a: tl, b: tr },
+        { a: tr, b: br },
+        { a: br, b: bl },
+        { a: bl, b: tl },
+      ];
+    }
+    case "polyline": {
+      const segs: Segment[] = [];
+      for (let i = 0; i < el.points.length - 1; i++) {
+        segs.push({ a: el.points[i], b: el.points[i + 1] });
+      }
+      if (el.closed && el.points.length > 2) {
+        segs.push({ a: el.points[el.points.length - 1], b: el.points[0] });
+      }
+      return segs;
+    }
+    case "ellipse":
+      return [];
+  }
+}
+
+/** Resolve one edge of an element by index, or null if out of range. */
+export function edgeSegment(el: Element, edgeIndex: number): Segment | null {
+  return elementEdges(el)[edgeIndex] ?? null;
+}
+
 /** Return a copy of the element translated by (dx, dy) document units. */
 export function translateElement(el: Element, dx: number, dy: number): Element {
   switch (el.type) {

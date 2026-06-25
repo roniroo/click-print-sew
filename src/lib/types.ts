@@ -93,6 +93,22 @@ export interface Piece {
   seamAllowance: number;
 }
 
+/** A reference to one straight edge of an element (a segment index). */
+export interface EdgeRef {
+  elementId: string;
+  /** Which segment: line=0; rect 0–3 (top,right,bottom,left); polyline=segment i. */
+  edgeIndex: number;
+}
+
+/** Two edges that get sewn together, shown with matching notches + a label. */
+export interface Seam {
+  id: string;
+  label: string;
+  a: EdgeRef;
+  b: EdgeRef;
+  color: string;
+}
+
 export interface PatternCanvas {
   /** Working area size in document units. */
   widthUnits: number;
@@ -110,6 +126,7 @@ export interface PatternDocument {
   layers: Layer[];
   elements: Element[];
   pieces: Piece[];
+  seams: Seam[];
   materials: {
     fabrics: Fabric[];
     notions: Notion[];
