@@ -38,6 +38,11 @@ yarn-error.log*
 /supabase/.branches
 /supabase/.temp
 
+# playwright
+/test-results
+/playwright-report
+/playwright/.cache
+
 # vercel
 .vercel
 
