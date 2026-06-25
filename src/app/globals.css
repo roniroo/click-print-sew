@@ -1,0 +1,194 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-hand: var(--font-hand);
+  --font-heading: var(--font-geist-sans);
+
+  --color-paper: var(--paper);
+  --color-rule: var(--rule);
+  --color-margin: var(--margin);
+  --color-thread: var(--thread);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  /* Warm paper + ink palette */
+  --background: oklch(0.985 0.013 91);
+  --foreground: oklch(0.28 0.024 264);
+  --paper: oklch(0.985 0.013 91);
+  --card: oklch(0.997 0.006 91);
+  --card-foreground: oklch(0.28 0.024 264);
+  --popover: oklch(0.997 0.006 91);
+  --popover-foreground: oklch(0.28 0.024 264);
+
+  /* Denim-ink primary */
+  --primary: oklch(0.45 0.097 256);
+  --primary-foreground: oklch(0.985 0.013 91);
+  --secondary: oklch(0.94 0.013 86);
+  --secondary-foreground: oklch(0.32 0.02 264);
+  --muted: oklch(0.95 0.011 86);
+  --muted-foreground: oklch(0.52 0.02 264);
+  --accent: oklch(0.93 0.022 72);
+  --accent-foreground: oklch(0.3 0.03 70);
+  --destructive: oklch(0.58 0.2 25);
+
+  --border: oklch(0.9 0.013 86);
+  --input: oklch(0.9 0.013 86);
+  --ring: oklch(0.45 0.097 256);
+
+  /* Notebook decoration */
+  --rule: oklch(0.86 0.035 240);
+  --margin: oklch(0.66 0.16 22);
+  --thread: oklch(0.6 0.17 25);
+  --grid-line: oklch(0.84 0.03 240);
+
+  --chart-1: oklch(0.6 0.17 25);
+  --chart-2: oklch(0.55 0.12 200);
+  --chart-3: oklch(0.55 0.13 145);
+  --chart-4: oklch(0.62 0.15 70);
+  --chart-5: oklch(0.5 0.16 300);
+
+  --sidebar: oklch(0.97 0.012 88);
+  --sidebar-foreground: oklch(0.28 0.024 264);
+  --sidebar-primary: oklch(0.45 0.097 256);
+  --sidebar-primary-foreground: oklch(0.985 0.013 91);
+  --sidebar-accent: oklch(0.93 0.018 86);
+  --sidebar-accent-foreground: oklch(0.3 0.02 264);
+  --sidebar-border: oklch(0.9 0.013 86);
+  --sidebar-ring: oklch(0.45 0.097 256);
+}
+
+.dark {
+  /* Blueprint-at-night */
+  --background: oklch(0.23 0.02 264);
+  --foreground: oklch(0.92 0.014 91);
+  --paper: oklch(0.26 0.022 264);
+  --card: oklch(0.27 0.022 264);
+  --card-foreground: oklch(0.92 0.014 91);
+  --popover: oklch(0.27 0.022 264);
+  --popover-foreground: oklch(0.92 0.014 91);
+
+  --primary: oklch(0.7 0.1 245);
+  --primary-foreground: oklch(0.2 0.02 264);
+  --secondary: oklch(0.32 0.02 264);
+  --secondary-foreground: oklch(0.92 0.014 91);
+  --muted: oklch(0.31 0.02 264);
+  --muted-foreground: oklch(0.7 0.018 264);
+  --accent: oklch(0.34 0.025 264);
+  --accent-foreground: oklch(0.92 0.014 91);
+  --destructive: oklch(0.62 0.19 25);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.7 0.1 245);
+
+  --rule: oklch(0.45 0.04 240);
+  --margin: oklch(0.6 0.15 22);
+  --thread: oklch(0.65 0.16 25);
+  --grid-line: oklch(0.4 0.03 240);
+
+  --sidebar: oklch(0.25 0.022 264);
+  --sidebar-foreground: oklch(0.92 0.014 91);
+  --sidebar-primary: oklch(0.7 0.1 245);
+  --sidebar-primary-foreground: oklch(0.2 0.02 264);
+  --sidebar-accent: oklch(0.32 0.02 264);
+  --sidebar-accent-foreground: oklch(0.92 0.014 91);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.7 0.1 245);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer components {
+  /* Soft dotted graph paper — used as a page/section backdrop. */
+  .bg-graph {
+    background-color: var(--paper);
+    background-image: radial-gradient(
+      color-mix(in oklch, var(--grid-line) 75%, transparent) 1.1px,
+      transparent 1.2px
+    );
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+  }
+
+  /* Square graph-paper grid — used inside the editor canvas chrome. */
+  .bg-grid {
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--grid-line) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--grid-line) 55%, transparent) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Ruled notebook lines with a red margin — for "paper" surfaces. */
+  .bg-ruled {
+    background-color: var(--card);
+    background-image:
+      linear-gradient(var(--margin) 0 0) 2.25rem 0 / 1.5px 100% no-repeat,
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(1.75rem - 1px),
+        color-mix(in oklch, var(--rule) 70%, transparent) calc(1.75rem - 1px),
+        color-mix(in oklch, var(--rule) 70%, transparent) 1.75rem
+      );
+  }
+
+  .font-hand {
+    font-family: var(--font-hand), ui-rounded, cursive;
+  }
+}

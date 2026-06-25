@@ -1,0 +1,21 @@
+# Render Blueprint for Cut Sew Print
+# Render auto-deploys this Next.js app from the connected GitHub repo on every
+# push to the deploy branch. Set the two Supabase env vars in the Render
+# dashboard (they're marked sync: false so they aren't stored in the repo).
+services:
+  - type: web
+    name: cut-sew-print
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
