@@ -5,6 +5,7 @@ import { Printer, Loader2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useEditor } from "@/lib/editor/store";
 import { elementsBounds } from "@/lib/editor/geometry";
+import { seamAllowanceByElement } from "@/lib/editor/offset";
 import { formatLength } from "@/lib/editor/units";
 import { PAPER_SIZES } from "@/lib/constants";
 import { computeTiling } from "@/lib/pdf/tiling";
@@ -52,6 +53,8 @@ export function PrintDialog({
   const [overlapMm, setOverlapMm] = useState(12);
   const [lineWidthMm, setLineWidthMm] = useState(0.4);
   const [testSquare, setTestSquare] = useState(true);
+  const [includeSeams, setIncludeSeams] = useState(true);
+  const [includeSeamAllowance, setIncludeSeamAllowance] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const paper = PAPER_SIZES.find((p) => p.id === paperId) ?? PAPER_SIZES[0];
@@ -60,27 +63,36 @@ export function PrintDialog({
 
   const { plan, contentW, contentH } = useMemo(() => {
     const hidden = new Set(doc.layers.filter((l) => !l.visible).map((l) => l.id));
+    const visible = doc.elements.filter((el) => !hidden.has(el.layerId));
     const b =
-      elementsBounds(doc.elements.filter((el) => !hidden.has(el.layerId))) ?? {
+      elementsBounds(visible) ?? {
         x: 0,
         y: 0,
         w: doc.canvas.widthUnits,
         h: doc.canvas.heightUnits,
       };
+    let maxSa = 0;
+    if (includeSeamAllowance) {
+      for (const v of seamAllowanceByElement(doc.pieces, visible).values()) {
+        maxSa = Math.max(maxSa, v);
+      }
+    }
+    const w = b.w + maxSa * 2;
+    const h = b.h + maxSa * 2;
     return {
       plan: computeTiling({
-        contentWUnits: b.w,
-        contentHUnits: b.h,
+        contentWUnits: w,
+        contentHUnits: h,
         units: doc.units,
         paperWmm,
         paperHmm,
         marginMm,
         overlapMm,
       }),
-      contentW: b.w,
-      contentH: b.h,
+      contentW: w,
+      contentH: h,
     };
-  }, [doc, paperWmm, paperHmm, marginMm, overlapMm]);
+  }, [doc, paperWmm, paperHmm, marginMm, overlapMm, includeSeamAllowance]);
 
   async function handleExport() {
     setBusy(true);
@@ -92,6 +104,8 @@ export function PrintDialog({
         overlapMm,
         lineWidthMm,
         includeTestSquare: testSquare,
+        includeSeams,
+        includeSeamAllowance,
         title: titleProp ?? useEditor.getState().title,
       });
       toast.success(
@@ -170,10 +184,20 @@ export function PrintDialog({
             </label>
           </div>
 
-          <label className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-            <span className="text-sm">Include scale test square</span>
-            <Switch checked={testSquare} onCheckedChange={setTestSquare} />
-          </label>
+          <div className="space-y-2">
+            <label className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <span className="text-sm">Seam allowance (cut line)</span>
+              <Switch checked={includeSeamAllowance} onCheckedChange={setIncludeSeamAllowance} />
+            </label>
+            <label className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <span className="text-sm">Seam numbers &amp; notches</span>
+              <Switch checked={includeSeams} onCheckedChange={setIncludeSeams} />
+            </label>
+            <label className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <span className="text-sm">Scale test square</span>
+              <Switch checked={testSquare} onCheckedChange={setTestSquare} />
+            </label>
+          </div>
 
           <div className="flex items-center gap-3 rounded-md bg-muted px-3 py-2.5 text-sm">
             <FileText className="size-5 text-muted-foreground" />

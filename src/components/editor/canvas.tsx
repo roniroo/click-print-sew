@@ -19,6 +19,11 @@ import {
 } from "@/lib/editor/geometry";
 import { constrainAngle, resolvePoint, snapToGrid } from "@/lib/editor/snap";
 import {
+  offsetElement,
+  seamAllowanceByElement,
+  type OffsetShape,
+} from "@/lib/editor/offset";
+import {
   createEllipse,
   createLine,
   createPolyline,
@@ -575,6 +580,7 @@ export function Canvas() {
   const hiddenLayers = new Set(doc.layers.filter((l) => !l.visible).map((l) => l.id));
   const visibleElements = doc.elements.filter((el) => !hiddenLayers.has(el.layerId));
   const selected = new Set(selectedIds);
+  const saMap = seamAllowanceByElement(doc.pieces, visibleElements);
 
   const gridLines = gridVisible && grid > 0 ? buildGrid(doc.canvas.widthUnits, doc.canvas.heightUnits, grid) : null;
 
@@ -620,6 +626,12 @@ export function Canvas() {
             vectorEffect="non-scaling-stroke"
           />
           {gridLines}
+          {/* seam-allowance (cut) lines, dashed, outside the outline */}
+          {visibleElements.map((el) => {
+            const sa = saMap.get(el.id);
+            if (!sa) return null;
+            return <OffsetShapeView key={`sa-${el.id}`} shape={offsetElement(el, sa)} />;
+          })}
           {/* elements */}
           {visibleElements.map((el) => (
             <ElementShape key={el.id} el={el} />
@@ -987,6 +999,25 @@ function PolylinePreview({
       ))}
     </g>
   );
+}
+
+/** Dashed seam-allowance (cut) outline. */
+function OffsetShapeView({ shape }: { shape: OffsetShape }) {
+  if (!shape) return null;
+  const common = {
+    fill: "none",
+    stroke: "#64748b",
+    strokeWidth: 1.25,
+    strokeDasharray: "6 4",
+    vectorEffect: "non-scaling-stroke" as const,
+  };
+  if (shape.kind === "rect") {
+    return <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} {...common} />;
+  }
+  if (shape.kind === "ellipse") {
+    return <ellipse cx={shape.cx} cy={shape.cy} rx={shape.rx} ry={shape.ry} {...common} />;
+  }
+  return <polygon points={shape.points.map((p) => `${p.x},${p.y}`).join(" ")} {...common} />;
 }
 
 /** Perpendicular notch ticks along a seam edge. */

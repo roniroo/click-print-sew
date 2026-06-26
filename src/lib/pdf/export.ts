@@ -1,8 +1,13 @@
 import { jsPDF } from "jspdf";
 import { svg2pdf } from "svg2pdf.js";
 import type { PatternDocument } from "@/lib/types";
-import { elementsBounds } from "@/lib/editor/geometry";
+import { edgeSegment, elementsBounds } from "@/lib/editor/geometry";
 import { elementToSvg } from "@/lib/editor/render";
+import {
+  offsetElement,
+  seamAllowanceByElement,
+  type OffsetShape,
+} from "@/lib/editor/offset";
 import {
   computeTiling,
   pageOriginMm,
@@ -18,6 +23,10 @@ export interface PrintOptions {
   /** Printed line weight in mm. */
   lineWidthMm: number;
   includeTestSquare: boolean;
+  /** Draw matched-seam edges, notches, and numbers. */
+  includeSeams: boolean;
+  /** Draw the dashed seam-allowance (cut) line outside each piece. */
+  includeSeamAllowance: boolean;
   title: string;
 }
 
@@ -26,21 +35,107 @@ function sanitizeFilename(title: string): string {
   return base || "pattern";
 }
 
+function safeColor(input: string): string {
+  return /^[#a-zA-Z0-9(),.\s%-]{0,40}$/.test(input) ? input : "#000000";
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!,
+  );
+}
+
+function round(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+function offsetToSvg(shape: OffsetShape, strokeUnits: number, mmPerUnit: number): string {
+  if (!shape) return "";
+  const dash = `${round(3 / mmPerUnit)} ${round(2 / mmPerUnit)}`;
+  const a = `fill="none" stroke="#64748b" stroke-width="${strokeUnits}" stroke-dasharray="${dash}"`;
+  if (shape.kind === "rect") {
+    return `<rect x="${round(shape.x)}" y="${round(shape.y)}" width="${round(shape.w)}" height="${round(shape.h)}" ${a}/>`;
+  }
+  if (shape.kind === "ellipse") {
+    return `<ellipse cx="${round(shape.cx)}" cy="${round(shape.cy)}" rx="${round(shape.rx)}" ry="${round(shape.ry)}" ${a}/>`;
+  }
+  return `<polygon points="${shape.points.map((p) => `${round(p.x)},${round(p.y)}`).join(" ")}" ${a}/>`;
+}
+
+function seamToSvg(
+  doc: PatternDocument,
+  hidden: Set<string>,
+  strokeUnits: number,
+  mmPerUnit: number,
+): string {
+  const half = 2 / mmPerUnit; // 4mm notch ticks
+  const r = 3 / mmPerUnit;
+  const fs = 3.6 / mmPerUnit;
+  const out: string[] = [];
+  for (const seam of doc.seams) {
+    const color = safeColor(seam.color);
+    for (const ref of [seam.a, seam.b]) {
+      const el = doc.elements.find((e) => e.id === ref.elementId);
+      if (!el || hidden.has(el.layerId)) continue;
+      const seg = edgeSegment(el, ref.edgeIndex);
+      if (!seg) continue;
+      out.push(
+        `<line x1="${round(seg.a.x)}" y1="${round(seg.a.y)}" x2="${round(seg.b.x)}" y2="${round(seg.b.y)}" stroke="${color}" stroke-width="${strokeUnits * 1.6}" stroke-linecap="round"/>`,
+      );
+      const dx = seg.b.x - seg.a.x;
+      const dy = seg.b.y - seg.a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      for (const t of [0.25, 0.5, 0.75]) {
+        const px = seg.a.x + dx * t;
+        const py = seg.a.y + dy * t;
+        out.push(
+          `<line x1="${round(px + nx * half)}" y1="${round(py + ny * half)}" x2="${round(px - nx * half)}" y2="${round(py - ny * half)}" stroke="${color}" stroke-width="${strokeUnits}"/>`,
+        );
+      }
+      const mx = (seg.a.x + seg.b.x) / 2;
+      const my = (seg.a.y + seg.b.y) / 2;
+      out.push(
+        `<circle cx="${round(mx)}" cy="${round(my)}" r="${round(r)}" fill="${color}"/>` +
+          `<text x="${round(mx)}" y="${round(my)}" font-size="${round(fs)}" fill="#ffffff" text-anchor="middle" dominant-baseline="central" font-family="Helvetica">${escapeXml(seam.label)}</text>`,
+      );
+    }
+  }
+  return out.join("");
+}
+
 function buildPageSvg(
   doc: PatternDocument,
   vb: { x: number; y: number; w: number; h: number },
   strokeUnits: number,
+  mmPerUnit: number,
+  opts: { includeSeams: boolean; includeSeamAllowance: boolean },
 ): string {
   const hidden = new Set(doc.layers.filter((l) => !l.visible).map((l) => l.id));
-  const body = doc.elements
-    .filter((el) => !hidden.has(el.layerId))
-    .map((el) =>
-      elementToSvg(el, { strokeWidth: strokeUnits, nonScaling: false, fill: "none" }),
-    )
-    .join("");
+  const visible = doc.elements.filter((el) => !hidden.has(el.layerId));
+  const parts: string[] = [];
+
+  if (opts.includeSeamAllowance) {
+    const saMap = seamAllowanceByElement(doc.pieces, visible);
+    for (const el of visible) {
+      const sa = saMap.get(el.id);
+      if (!sa) continue;
+      parts.push(offsetToSvg(offsetElement(el, sa), strokeUnits, mmPerUnit));
+    }
+  }
+
+  for (const el of visible) {
+    parts.push(elementToSvg(el, { strokeWidth: strokeUnits, nonScaling: false, fill: "none" }));
+  }
+
+  if (opts.includeSeams) {
+    parts.push(seamToSvg(doc, hidden, strokeUnits, mmPerUnit));
+  }
+
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${vb.w}" height="${vb.h}" ` +
-    `viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" preserveAspectRatio="none">${body}</svg>`
+    `viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" preserveAspectRatio="none">${parts.join("")}</svg>`
   );
 }
 
@@ -131,8 +226,14 @@ export async function exportPatternPdf(
       h: doc.canvas.heightUnits,
     };
 
-  // small padding so edge strokes aren't clipped
-  const padUnits = Math.max(bounds.w, bounds.h, 1) * 0.01;
+  // expand the area to fit the seam-allowance cut lines, plus a little padding
+  let maxSa = 0;
+  if (opts.includeSeamAllowance) {
+    for (const v of seamAllowanceByElement(doc.pieces, visible).values()) {
+      maxSa = Math.max(maxSa, v);
+    }
+  }
+  const padUnits = Math.max(bounds.w, bounds.h, 1) * 0.01 + maxSa;
   const content = {
     x: bounds.x - padUnits,
     y: bounds.y - padUnits,
@@ -183,7 +284,10 @@ export async function exportPatternPdf(
         };
 
         const svgEl = new DOMParser().parseFromString(
-          buildPageSvg(doc, vb, strokeUnits),
+          buildPageSvg(doc, vb, strokeUnits, plan.mmPerUnit, {
+            includeSeams: opts.includeSeams,
+            includeSeamAllowance: opts.includeSeamAllowance,
+          }),
           "image/svg+xml",
         ).documentElement as unknown as SVGElement;
         host.appendChild(svgEl);
