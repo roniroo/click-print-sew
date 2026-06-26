@@ -4,9 +4,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { loginSchema, signupSchema } from "@/lib/validation";
 import { usernameToEmail } from "@/lib/auth-email";
+import { generateRecoveryCode, hashRecoveryCode } from "@/lib/recovery";
 
 export interface AuthState {
   error: string | null;
+  /** Set after a successful signup so the UI can show the one-time recovery code. */
+  recoveryCode?: string;
 }
 
 /** Only allow same-origin relative redirect targets. */
@@ -49,7 +52,17 @@ export async function signUp(
     return { error: "That username is taken. Try another." };
   }
 
-  redirect(safeRedirect(formData.get("redirect")));
+  // Issue a one-time recovery code (the user is signed in now, so they can
+  // write their own row). Returned for display instead of redirecting.
+  const recoveryCode = generateRecoveryCode();
+  if (data.user) {
+    const hash = await hashRecoveryCode(recoveryCode);
+    // delete+insert instead of upsert: the write-only table has no SELECT
+    // policy, which upsert's conflict lookup would require.
+    await supabase.from("recovery_codes").delete().eq("user_id", data.user.id);
+    await supabase.from("recovery_codes").insert({ user_id: data.user.id, hash });
+  }
+  return { error: null, recoveryCode };
 }
 
 export async function signIn(

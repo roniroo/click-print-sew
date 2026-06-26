@@ -2,11 +2,13 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { signIn, signUp, type AuthState } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RecoveryCodeCard } from "@/components/account/recovery-code-card";
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -21,6 +23,26 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   const isSignup = mode === "signup";
+  const router = useRouter();
+
+  // After signup, show the one-time recovery code before continuing.
+  if (isSignup && state.recoveryCode) {
+    return (
+      <div className="space-y-4">
+        <h2 className="font-hand text-2xl font-bold tracking-tight">
+          Save your recovery code
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          There&apos;s no email on file, so this is the only way to reset your
+          password if you ever forget it.
+        </p>
+        <RecoveryCodeCard code={state.recoveryCode} />
+        <Button className="w-full" onClick={() => router.push(redirectTo)}>
+          I&apos;ve saved it — continue
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4">
@@ -68,6 +90,17 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           </button>
         </div>
       </div>
+
+      {!isSignup ? (
+        <div className="-mt-2 text-right">
+          <Link
+            href="/forgot"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Forgot your password?
+          </Link>
+        </div>
+      ) : null}
 
       {state.error ? (
         <p

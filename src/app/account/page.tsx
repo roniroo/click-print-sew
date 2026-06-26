@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SectionHeading } from "@/components/paper/section-heading";
 import { PaperSheet } from "@/components/paper/paper-sheet";
 import { ChangePasswordForm } from "@/components/account/change-password-form";
+import { RecoveryCodeSection } from "@/components/account/recovery-code-section";
 
 export const metadata = { title: "Account" };
 
@@ -31,6 +32,15 @@ export default async function AccountPage() {
               password to set a new one.
             </p>
             <ChangePasswordForm />
+          </PaperSheet>
+
+          <PaperSheet lifted className="mt-5 max-w-md p-6">
+            <h2 className="font-hand text-2xl font-bold tracking-tight">
+              Recovery code
+            </h2>
+            <div className="mt-3">
+              <RecoveryCodeSection />
+            </div>
           </PaperSheet>
         </div>
       </main>

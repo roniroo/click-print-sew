@@ -20,6 +20,8 @@ test("sign up, draw, print, and persist", async ({ page }) => {
   await page.fill("#username", user);
   await page.fill("#password", pass);
   await page.click('button[type="submit"]');
+  // signup now shows a one-time recovery code before continuing
+  await page.getByRole("button", { name: /continue/i }).click();
   await page.waitForURL("**/dashboard");
 
   // ---- create + open a pattern ----
@@ -88,6 +90,8 @@ test("library: dashboard, publish, explore, view, and clone", async ({ page }) =
   await page.fill("#username", user);
   await page.fill("#password", pass);
   await page.click('button[type="submit"]');
+  // signup now shows a one-time recovery code before continuing
+  await page.getByRole("button", { name: /continue/i }).click();
   await page.waitForURL("**/dashboard");
 
   await page.goto("/patterns/new");
@@ -130,4 +134,46 @@ test("library: dashboard, publish, explore, view, and clone", async ({ page }) =
   await page.waitForURL("**/edit");
   const cloneId = /patterns\/([0-9a-f-]+)\/edit/.exec(page.url())![1];
   expect(cloneId).not.toBe(id);
+});
+
+test("recovery: reset a forgotten password with a recovery code", async ({ page }) => {
+  const user = "rec_" + Math.random().toString(36).slice(2, 8);
+  const oldPass = "originalpass1";
+  const newPass = "freshpass2zzz";
+
+  // sign up and capture the one-time recovery code
+  await page.goto("/signup");
+  await page.fill("#username", user);
+  await page.fill("#password", oldPass);
+  await page.click('button[type="submit"]');
+  const code = (await page.locator("code").first().textContent())!.trim();
+  expect(code.replace(/[^A-Z0-9]/g, "").length).toBe(16);
+  await page.getByRole("button", { name: /continue/i }).click();
+  await page.waitForURL("**/dashboard");
+
+  // sign out
+  await page.click('button[aria-label="Account menu"]');
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await page.waitForURL(/\/$/);
+
+  // reset via /forgot using the recovery code
+  await page.goto("/forgot");
+  await page.fill("#username", user);
+  await page.fill("#code", code);
+  await page.fill("#password", newPass);
+  await page.click('button[type="submit"]');
+  await expect(page.getByText("Password reset")).toBeVisible({ timeout: 8000 });
+
+  // the old password no longer works…
+  await page.goto("/login");
+  await page.fill("#username", user);
+  await page.fill("#password", oldPass);
+  await page.click('button[type="submit"]');
+  await expect(page.getByText(/Incorrect username or password/)).toBeVisible();
+
+  // …but the new one does
+  await page.fill("#username", user);
+  await page.fill("#password", newPass);
+  await page.click('button[type="submit"]');
+  await page.waitForURL("**/dashboard");
 });
